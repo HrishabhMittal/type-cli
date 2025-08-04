@@ -24,7 +24,11 @@ public:
             running=false;
         }
     }
-
+    void reset_and_start() {
+        running=true;
+        start_time=clock::now();
+        past_time=start_time;
+    }
     void resume() {
         if (!running) {
             auto now=clock::now();

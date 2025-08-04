@@ -1,5 +1,6 @@
 #include "oui/src/elements.cpp"
 #include "testgen.cpp"
+#include "timer.cpp"
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
@@ -24,7 +25,11 @@ class TypeHandler {
     std::string grey, blue, red;
     std::string typed;
     std::string original;
+    Timer t;
+    bool timerstarted=false;
+    bool running=true;
     void rebuildTextarea() {
+        if (!running) return;
         std::string result;
         int ogp=0,typ=0;
         while (true) {
@@ -36,6 +41,11 @@ class TypeHandler {
             }
             if (typ==typed.size()) {
                 result+=grey;
+                if (ogp==original.size()) {
+                    t.stop();
+                    running=false;
+                    return;
+                }
                 while (ogp<original.size()) result+=original[ogp++];
             }
             if (ogp==original.size()) break;
@@ -71,6 +81,7 @@ public:
         return typed.size();
     }
     int update() {
+        if (!running) return true;
         int c=Input::handleInput();
         if ((typed.size()==0||typed.back()==' ') && c==' ') return false;
         if (typed.size()!=0 && c==BACKSPACE) {
@@ -78,6 +89,7 @@ public:
         } else if (isprint(c)) {
             typed.push_back(c);
         } else return false;
+        if (!timerstarted) t.reset_and_start(),timerstarted=true;
         rebuildTextarea();
         return true;
     }
@@ -87,6 +99,7 @@ struct TypingApp {
     TypeHandler* th;
     bool running=true;
     float wpm=0;
+    std::pair<int,int> lastsize=termsize();    
     TypingApp() {
         app=new Application(Rect{1, 1, 50, 12}, false);
             app->add(std::make_unique<Div>(Rect{},true),0.2);
@@ -101,7 +114,6 @@ struct TypingApp {
         th=new TypeHandler(typingarea);
     }
     void fit_screen() {
-        static auto lastsize=termsize();    
         auto size=termsize();
         if (size!=lastsize) resize({1,1,size.first,size.second}),lastsize=size;
     }
