@@ -1,1 +1,116 @@
 #include "oui/src/elements.cpp"
+#include "testgen.cpp"
+#include <cctype>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <ostream>
+#include <string>
+#include <utility>
+#include <sys/ioctl.h>
+#include <unistd.h>
+
+std::pair<int,int> termsize() {
+    struct winsize win;
+    if(ioctl(STDIN_FILENO, TIOCGWINSZ, &win) == -1) {
+        perror("ioctl");
+        exit(1);
+    }
+    return {win.ws_col,win.ws_row};
+}
+class TypeHandler {
+    std::string& textarea;
+    std::string grey, blue, red;
+    std::string typed;
+    std::string original;
+    void rebuildTextarea() {
+        std::string result;
+        int ogp=0,typ=0;
+        while (true) {
+            result+=blue;
+            while (ogp<original.size()&&typ<typed.size()&&(original[ogp]==typed[typ])) {
+                result+=original[ogp];
+                ogp++;
+                typ++;
+            }
+            if (typ==typed.size()) {
+                result+=grey;
+                while (ogp<original.size()) result+=original[ogp++];
+            }
+            if (ogp==original.size()) break;
+            result+=red;
+            while (typ<typed.size()&&ogp<original.size()&&typed[typ]!=' '&&original[ogp]!=' ') {
+                if (typed[typ]!=original[ogp]) {
+                    result+=original[ogp];
+                    typ++;
+                    ogp++;
+                }
+            }
+            if (typ<typed.size()&&typed[typ]==' ') {
+                while (ogp<original.size()&&original[ogp]!=' ') {
+                    result+=original[ogp++];
+                }
+            } else if (ogp<original.size()&&original[ogp]==' ') {
+                while (typ<typed.size()&&typed[typ]!=' ') {
+                    result+=typed[typ++];
+                }
+            }
+        }
+        textarea=std::move(result);
+    }
+public:
+    TypeHandler(std::string& out): textarea(out),
+        grey(Terminal::FGColor_str({200,200,200})), blue(Terminal::FGColor_str({45,90,100})), red(Terminal::FGColor_str({90,45,75})) {
+        WordList::init(std::fstream("words.txt"));
+        original=WordList::genRandomText();
+        rebuildTextarea();
+    }
+    int curpos() {
+        return typed.size();
+    }
+    int update() {
+        int c=Input::handleInput();
+        if ((typed.size()==0||typed.back()==' ') && c==' ') return false;
+        if (typed.size()!=0 && c==BACKSPACE) {
+            typed.pop_back();
+        } else if (isprint(c)) {
+            typed.push_back(c);
+        } else return false;
+        rebuildTextarea();
+        return true;
+    }
+};
+
+int main() {
+    Terminal::set_raw_mode();
+    Terminal::OpenAltBuffer();
+    Terminal::cursorInvisible();
+    
+
+    Application app(Rect{1, 1, 50, 12}, false);
+        app.add(std::make_unique<Div>(Rect{},true),0.2);
+        auto mainscreen=std::make_unique<Div>(Rect{},false);
+            auto topbar=std::make_unique<Div>(Rect{},true);
+            auto typescreen=std::make_unique<Div>(Rect{},true);
+                typescreen->add(std::make_unique<Div>(Rect{},true),0.2);
+                auto maintypingarea=std::make_unique<Label>("");
+                    std::string& typingarea=maintypingarea->text;
+                typescreen->add(std::move(maintypingarea),0.6);
+            mainscreen->add(std::move(topbar),0.2);
+            mainscreen->add(std::move(typescreen),0.6);
+        app.add(std::move(mainscreen),0.6);
+
+    bool running=true;
+    TypeHandler th(typingarea);
+    auto lastsize=termsize();
+    app.resize({1,1,lastsize.first,lastsize.second});
+    app.render();
+    while (running) {
+        while (!th.update());
+        auto size=termsize();
+        if (size!=lastsize) app.resize({1,1,size.first,size.second}),lastsize=size;
+        app.render();
+    }
+    Terminal::resetColor();
+}
