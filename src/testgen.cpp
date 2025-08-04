@@ -13,8 +13,9 @@ double getRandom(double min, double max) {
 namespace WordList {
     namespace {
         std::vector<std::string> words;
-        std::string random() {
-            return words[getRandom(0,words.size())];
+        std::string random(int size) {
+            if (size>=words.size()) size=words.size();
+            return words[getRandom(0,size)];
         }
     }
     void init(std::fstream file) {
@@ -24,9 +25,9 @@ namespace WordList {
             words.push_back(s);
         }
     }
-    std::string genRandomText(int words=50) {
+    std::string genRandomText(int words=50,int size=500) {
         std::string text;
-        while (words--) text+=random()+" ";
+        while (words--) text+=random(size)+" ";
         text.pop_back();
         return text;
     }
